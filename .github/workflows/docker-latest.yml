@@ -1,0 +1,26 @@
+name: Docker build latest
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  DOCKER_IMAGE_ID: "ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:latest"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build the Docker image and push it to GHCR
+        run: |
+          docker-compose -f docker-compose.build.yml build --no-cache
+          docker-compose -f docker-compose.build.yml push

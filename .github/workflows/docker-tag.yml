@@ -1,0 +1,28 @@
+name: Docker tag release
+
+on:
+  push:
+    tags:
+      - '**'
+
+env:
+  DOCKER_IMAGE_ID_FROM: "ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:latest"
+  DOCKER_IMAGE_ID_TO: "ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ github.ref_name }}"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Retag latest to Git tag and push the new tag to GHCR
+        run: |
+          docker pull ${DOCKER_IMAGE_ID_FROM}
+          docker tag ${DOCKER_IMAGE_ID_FROM} ${DOCKER_IMAGE_ID_TO}
+          docker push ${DOCKER_IMAGE_ID_TO}

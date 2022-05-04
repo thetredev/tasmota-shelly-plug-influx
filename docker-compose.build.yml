@@ -1,0 +1,8 @@
+version: '3.7'
+
+services:
+  shelly2influxdb:
+    image: ${DOCKER_IMAGE_ID}
+    restart: always
+    build:
+      context: .
