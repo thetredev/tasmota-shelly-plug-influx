@@ -8,12 +8,37 @@ from typing import NamedTuple
 import paho.mqtt.client as mqtt
 from influxdb import InfluxDBClient
 
-# Parse config file
-config_json = Path("/config/shelly2influxdb.json")
 
+def is_container():
+    """Are we running as container?"""
+    if Path("/run/.containerenv").exists():
+        return True
+
+    if Path("/.dockerenv").exists():
+        return True
+
+    cgroup_path = Path('/proc/self/cgroup')
+
+    if cgroup_path.exists() and cgroup_path.is_file():
+        with cgroup_path.open() as f:
+            return any('docker' in line for line in f)
+
+    return False
+
+
+# Parse config file
+config_json = Path("config/shelly2influxdb.json")
+
+if is_container():
+    config_json = Path("/").joinpath(config_json)
+
+
+# Panic if no config was found
 if not config_json.exists():
     raise FileNotFoundError(f"Config file {config_json.as_posix()} does not exist!")
 
+
+# Read config file
 with config_json.open() as config_file:
     config = json.load(config_file)
 
@@ -22,6 +47,7 @@ with config_json.open() as config_file:
 influxdb_client = InfluxDBClient(**config["influxdb"] | {"database": None})
 
 
+# Do the magic...
 class SensorData(NamedTuple):
     location: str
     measurement: str
