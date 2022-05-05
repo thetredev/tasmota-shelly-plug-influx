@@ -19,7 +19,10 @@
 
   "targets": {
     "ENERGY": [
-      "ApparentPower"
+      {
+        "name": "ApparentPower",
+        "type": "float"
+      }
     ]
   }
 }

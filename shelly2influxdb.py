@@ -1,4 +1,5 @@
 import json
+import pydoc
 import random
 import re
 import string
@@ -87,7 +88,11 @@ def _parse_mqtt_message(topic: bytes, payload: str):
         payload_target = payload[target]
 
         for field in target:
-            yield SensorData(location, measurement, float(payload_target[field]))
+            field_name = field["name"]
+            field_type = pydoc.locate(field["type"])
+            field_value = field_type(payload_target[field_name])
+
+            yield SensorData(location, measurement, field_value)
 
 
 def _send_sensor_data_to_influxdb(sensor_data: SensorData):
