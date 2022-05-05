@@ -9,7 +9,7 @@ import paho.mqtt.client as mqtt
 from influxdb import InfluxDBClient
 
 # Parse config file
-config_json = Path("/config/shelly-to-influxdb.json")
+config_json = Path("/config/shelly2influxdb.json")
 
 if not config_json.exists():
     raise FileNotFoundError(f"Config file {config_json.as_posix()} does not exist!")
