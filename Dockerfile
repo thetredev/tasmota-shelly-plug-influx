@@ -5,9 +5,11 @@ RUN adduser -D -u 5000 shelly
 WORKDIR /home/shelly
 USER shelly
 
-COPY --chown=shelly:shelly . ./
+COPY --chown=shelly:shelly ./requirements.txt ./
 
 ENV PATH="${PATH}:/home/shelly/.local/bin"
-RUN pip3 install --user -r requirements.txt
+RUN pip3 install --user -r requirements.txt && \
+    rm -rf requirements.txt
 
-ENTRYPOINT [ "python3", "/home/shelly/shelly-to-influxdb.py" ]
+COPY --chown=shelly:shelly ./shelly2influxdb.py ./
+ENTRYPOINT [ "python3", "/home/shelly/shelly2influxdb.py" ]
