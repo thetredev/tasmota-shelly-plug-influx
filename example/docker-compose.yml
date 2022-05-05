@@ -1,0 +1,8 @@
+version: '3.7'
+
+services:
+  shelly2influxdb:
+    image: ghcr.io/thetredev/tasmota-shelly-plug-influx:latest
+    restart: always
+    volumes:
+        - ./shelly2influxdb.json:/config/shelly2influxdb.json:ro
