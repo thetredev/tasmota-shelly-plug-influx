@@ -1,6 +1,8 @@
 FROM python:3.10.4-alpine3.15
 
-RUN adduser -D -u 5000 shelly
+RUN adduser -D -u 5000 shelly && \
+    mkdir -p /config && \
+    chown -R shelly:shelly /config
 
 WORKDIR /home/shelly
 USER shelly

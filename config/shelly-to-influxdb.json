@@ -1,0 +1,25 @@
+{
+  "influxdb": {
+    "host": "127.0.0.1",
+    "port": 8086,
+    "username": "mqtt",
+    "password": "mqtt",
+    "database": "shellies"
+  },
+
+  "mqtt": {
+    "host": "127.0.0.1",
+    "port": 1883,
+    "username": "mqtt",
+    "password": "mqtt",
+    "topic": "shellies/+/+",
+    "message_regex": "shellies/([^/]+)/([^/]+)",
+    "client_id_prefix": "shelly-to-influx-client"
+  },
+
+  "targets": {
+    "ENERGY": [
+      "ApparentPower"
+    ]
+  }
+}

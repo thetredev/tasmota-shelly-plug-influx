@@ -1,41 +1,25 @@
 import json
+import random
 import re
+import string
+from pathlib import Path
 from typing import NamedTuple
 
 import paho.mqtt.client as mqtt
 from influxdb import InfluxDBClient
 
+# Parse config file
+config_json = Path("/config/shelly-to-influxdb.json")
 
-##########
-# CONFIG #
-##########
-# Dennis: ich hab die aus der Vorlage NICHT angepasst, hier sollten natuerlich deine Daten rein!
+if not config_json.exists():
+    raise FileNotFoundError(f"Config file {config_json.as_posix()} does not exist!")
 
-INFLUXDB_ADDRESS = '192.168.0.8'
-INFLUXDB_USER = 'mqtt'
-INFLUXDB_PASSWORD = 'mqtt'
-INFLUXDB_DATABASE = 'weather_stations'
-
-MQTT_ADDRESS = '192.168.0.8'
-MQTT_USER = 'cdavid'
-MQTT_PASSWORD = 'cdavid'
-MQTT_TOPIC = 'home/+/+'
-MQTT_REGEX = 'home/([^/]+)/([^/]+)'
-MQTT_CLIENT_ID = 'MQTTInfluxDBBridge'
+with config_json.open() as config_file:
+    config = json.load(config_file)
 
 
-# kann vmtl. noch erweitert werden, aber eins nach dem anderen
-MQTT_TARGET = 'ENERGY'
-
-MQTT_FIELDS = [
-    'ApparentPower',
-    # hier weitere relevante auflisten
-]
-
-##############
-# CONFIG END #
-##############
-influxdb_client = InfluxDBClient(INFLUXDB_ADDRESS, 8086, INFLUXDB_USER, INFLUXDB_PASSWORD, None)
+# Create InfluxDB client
+influxdb_client = InfluxDBClient(**config["influxdb"] | {"database": None})
 
 
 class SensorData(NamedTuple):
@@ -44,14 +28,16 @@ class SensorData(NamedTuple):
     value: float
 
 
-def on_connect(client, userdata, flags, rc):
-    """ The callback for when the client receives a CONNACK response from the server."""
-    print(f'Connected with result code {str(rc)}')
-    client.subscribe(MQTT_TOPIC)
+def on_connect(client: mqtt.Client, _, __, rc: int):
+    """The callback for when the client receives a CONNACK response from the server."""
+    print(f'Connected with result code {rc}')
+    client.subscribe(config["mqtt"]["topic"])
 
 
-def _parse_mqtt_message(topic, payload):
-    match = re.match(MQTT_REGEX, topic)
+def _parse_mqtt_message(topic: bytes, payload: str):
+    mqtt_config = config["mqtt"]
+
+    match = re.match(mqtt_config["message_prefix"], topic)
 
     if not match:
         return
@@ -65,28 +51,20 @@ def _parse_mqtt_message(topic, payload):
     # Payload => JSON object
     payload = json.loads(payload)
 
-    # Wir interessieren uns nur fuer <MQTT_TARGET> ("ENERGY")
-    if MQTT_TARGET not in payload:
+    if mqtt_config["target"] not in payload:
         return
 
-    # ... also auch nur den Teil, bitte.
-    payload_target = payload[MQTT_TARGET]
+    for target in mqtt_config["targets"]:
+        if target not in payload:
+            continue
 
-    # Hier wird's spannend. Kommentar lesen, vllt. stimmt das noch nicht so ganz.
-    for field in MQTT_FIELDS:
-        # Ich weiss nicht genau, was hier genau in die InfluxDB geschrieben wird.
-        # Vielleicht muss hier <measurement> auch mit <field> ersetzt werden.
+        payload_target = payload[target]
 
-        # <field> ist jeweils ein String aus <MQTT_FIELDS>, also "ApparentPower", usw.
-
-        # Also theoretisch so:
-        # yield SensorData(location, field, float(payload_target[field]))
-
-        # Einfach mal ausprobieren!
-        yield SensorData(location, measurement, float(payload_target[field]))
+        for field in target:
+            yield SensorData(location, measurement, float(payload_target[field]))
 
 
-def _send_sensor_data_to_influxdb(sensor_data):
+def _send_sensor_data_to_influxdb(sensor_data: SensorData):
     json_body = [
         {
             'measurement': sensor_data.measurement,
@@ -102,7 +80,7 @@ def _send_sensor_data_to_influxdb(sensor_data):
     influxdb_client.write_points(json_body)
 
 
-def on_message(client, userdata, msg):
+def on_message(_, __, msg: mqtt.MQTTMessage):
     """The callback for when a PUBLISH message is received from the server."""
     print(f'{msg.topic} {str(msg.payload)}')
 
@@ -118,22 +96,28 @@ def on_message(client, userdata, msg):
 
 def _init_influxdb_database():
     databases = influxdb_client.get_list_database()
+    influxdb_database = config["influxdb"]["database"]
 
-    if len(list(filter(lambda x: x['name'] == INFLUXDB_DATABASE, databases))) == 0:
-        influxdb_client.create_database(INFLUXDB_DATABASE)
+    if len(list(filter(lambda x: x['name'] == influxdb_database, databases))) == 0:
+        influxdb_client.create_database(influxdb_database)
 
-    influxdb_client.switch_database(INFLUXDB_DATABASE)
+    influxdb_client.switch_database(influxdb_database)
 
 
 def main():
     _init_influxdb_database()
 
-    mqtt_client = mqtt.Client(MQTT_CLIENT_ID)
-    mqtt_client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
+    mqtt_config = config["mqtt"]
+    mqtt_client_id_prefix = mqtt_config["client_id_prefix"]
+    mqtt_client_id_suffix = "".join(random.choices(f"{string.ascii_letters}{string.digits}", k=16))
+    mqtt_client_id = f"{mqtt_client_id_prefix}-{mqtt_client_id_suffix}"
+
+    mqtt_client = mqtt.Client(mqtt_client_id)
+    mqtt_client.username_pw_set(mqtt_config["username"], mqtt_config["password"])
     mqtt_client.on_connect = on_connect
     mqtt_client.on_message = on_message
 
-    mqtt_client.connect(MQTT_ADDRESS, 1883)
+    mqtt_client.connect(mqtt_config["host"], mqtt_config["port"])
     mqtt_client.loop_forever()
 
 
